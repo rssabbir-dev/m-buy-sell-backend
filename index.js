@@ -25,15 +25,17 @@ const client = new MongoClient(uri, {
 //Verify JWT Token
 const verifyJWT = async (req, res, next) => {
 	const authHeader = req.headers.authorization;
-	console.log(req.headers);
 	if (!authHeader) {
-		return res.status(401).send({ message: 'Unauthorized Access' });
+		return res
+			.status(401)
+			.send({ message: 'Unauthorized Access', code: 401 });
 	}
+	const token = authHeader.split(' ')[1];
 	try {
 		const decoded = jwt.verify(token, process.env.JWT_ACCESS_TOKEN);
 		req.decoded = decoded;
 	} catch (err) {
-		return res.status(403).send({ message: 'Access Forbidden' });
+		return res.status(403).send({ message: 'Access Forbidden', code: 403 });
 	}
 	next();
 };
@@ -46,19 +48,58 @@ const run = async () => {
 		const userCollection = database.collection('users');
 		const categoryCollection = database.collection('categories');
 
+		const verifySeller = async (req, res, next) => {
+			const decoded = req.decoded;
+			const sellerQuery = { uid: decoded.uid };
+			const seller = await userCollection.findOne(sellerQuery);
+			if (!seller && seller.role !== 'seller') {
+				return res
+					.status(403)
+					.send({ message: 'Access Forbidden', code: 403 });
+			}
+			next();
+		};
+		const verifyAdmin = async (req, res, next) => {
+			const decoded = req.decoded;
+			const adminQuery = { uid: decoded.uid };
+			const admin = await userCollection.findOne(adminQuery);
+			if (!admin && admin.role !== 'admin') {
+				return res
+					.status(403)
+					.send({ message: 'Access Forbidden', code: 403 });
+			}
+			next();
+		};
 		//All Product Operation
-		app.get('/products/:uid', async (req, res) => {
-			console.log(req.decoded);
+		app.get('/products/:uid', verifyJWT, verifySeller, async (req, res) => {
+			const decoded = req.decoded;
 			const uid = req.params.uid;
 			const query = { seller_uid: uid };
+			if (uid !== decoded.uid) {
+				return res
+					.status(403)
+					.send({ message: 'Access Forbidden', code: 403 });
+			}
 			const products = await productCollection.find(query).toArray();
 			res.send(products);
 		});
-		app.post('/products', verifyJWT, async (req, res) => {
-			const product = req.body;
-			const result = await productCollection.insertOne(product);
-			res.send(result);
-		});
+		app.post(
+			'/products/:uid',
+			verifyJWT,
+			verifySeller,
+			async (req, res) => {
+				const decoded = req.decoded;
+				const uid = req.params.uid;
+				const product = req.body;
+				if (uid !== decoded.uid) {
+					return res
+						.status(403)
+						.send({ message: 'Access Forbidden', code: 403 });
+				}
+				const result = await productCollection.insertOne(product);
+				res.send(result);
+			}
+		);
 
 		//All User Operation
 		app.post('/jwt', async (req, res) => {
@@ -84,10 +125,14 @@ const run = async () => {
 			const user = await userCollection.findOne(query);
 			res.send({ isAdmin: user?.role === 'admin' ? true : false });
 		});
+		
+		app.get('/buyer/:uid', async (req, res) => {
+			
+		})
 
 		//All Seller Operation
+
 		app.get('/user/seller/:uid', async (req, res) => {
-			
 			const uid = req.params.uid;
 			const query = { uid: uid };
 			const user = await userCollection.findOne(query);
