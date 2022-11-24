@@ -22,6 +22,21 @@ const client = new MongoClient(uri, {
 	useUnifiedTopology: true,
 	serverApi: ServerApiVersion.v1,
 });
+//Verify JWT Token
+const verifyJWT = async (req, res, next) => {
+	const authHeader = req.headers.authorization;
+	console.log(req.headers);
+	if (!authHeader) {
+		return res.status(401).send({ message: 'Unauthorized Access' });
+	}
+	try {
+		const decoded = jwt.verify(token, process.env.JWT_ACCESS_TOKEN);
+		req.decoded = decoded;
+	} catch (err) {
+		return res.status(403).send({ message: 'Access Forbidden' });
+	}
+	next();
+};
 
 // Run MongoDB Database
 const run = async () => {
@@ -31,7 +46,30 @@ const run = async () => {
 		const userCollection = database.collection('users');
 		const categoryCollection = database.collection('categories');
 
+		//All Product Operation
+		app.get('/products/:uid', async (req, res) => {
+			console.log(req.decoded);
+			const uid = req.params.uid;
+			const query = { seller_uid: uid };
+			const products = await productCollection.find(query).toArray();
+			res.send(products);
+		});
+		app.post('/products', verifyJWT, async (req, res) => {
+			const product = req.body;
+			const result = await productCollection.insertOne(product);
+			res.send(result);
+		});
+
 		//All User Operation
+		app.post('/jwt', async (req, res) => {
+			const user = req.body;
+			jwt.sign(user, process.env.JWT_ACCESS_TOKEN, (err, token) => {
+				console.log(token);
+				res.send({ accessToken: token });
+			});
+			console.log(user);
+		});
+
 		//save new user
 		app.post('/users', async (req, res) => {
 			const user = req.body;
@@ -42,17 +80,18 @@ const run = async () => {
 		//All Admin Operation
 		app.get('/user/admin/:uid', async (req, res) => {
 			const uid = req.params.uid;
-			const query = { uid: uid };
+			const query = { uid };
 			const user = await userCollection.findOne(query);
-			res.send({ isAdmin: user.role === 'admin' ? true : false });
+			res.send({ isAdmin: user?.role === 'admin' ? true : false });
 		});
 
 		//All Seller Operation
 		app.get('/user/seller/:uid', async (req, res) => {
+			
 			const uid = req.params.uid;
 			const query = { uid: uid };
 			const user = await userCollection.findOne(query);
-			res.send({ isSeller: user.role === 'seller' ? true : false });
+			res.send({ isSeller: user?.role === 'seller' ? true : false });
 		});
 	} finally {
 	}
