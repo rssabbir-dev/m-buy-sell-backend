@@ -125,7 +125,18 @@ const run = async () => {
 			const user = await userCollection.findOne(query);
 			res.send({ isAdmin: user?.role === 'admin' ? true : false });
 		});
-		
+		app.get('/sellers/:uid', verifyJWT, verifyAdmin, async (req, res) => {
+			const decoded = req.decoded;
+			const uid = req.params.uid;
+			if (uid !== decoded.uid) {
+				return res
+					.status(403)
+					.send({ message: 'Access Forbidden', code: 403 });
+			}
+			const query = {};
+			const users = await userCollection.find(query).toArray();
+			res.send(users);
+		});
 		app.get('/buyer/:uid', async (req, res) => {
 			
 		})
