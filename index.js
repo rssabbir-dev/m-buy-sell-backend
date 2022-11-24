@@ -125,39 +125,72 @@ const run = async () => {
 			const user = await userCollection.findOne(query);
 			res.send({ isAdmin: user?.role === 'admin' ? true : false });
 		});
-		app.get('/users-by-role/:uid', verifyJWT, verifyAdmin, async (req, res) => {
-			const decoded = req.decoded;
-			const uid = req.params.uid;
-			const role = req.query.role;
-			if (uid !== decoded.uid) {
-				return res
-					.status(403)
-					.send({ message: 'Access Forbidden', code: 403 });
-			}
-			const query = {role};
-			const users = await userCollection.find(query).toArray();
-			res.send(users);
-		});
-
-		app.patch('/seller-verify/:uid', verifyJWT, verifyAdmin, async (req, res) => {
-			const decoded = req.decoded;
-			const uid = req.params.uid;
-			const seller_id = req.query.seller_id;
-			if (uid !== decoded.uid) {
-				return res
-					.status(403)
-					.send({ message: 'Access Forbidden', code: 403 });
-			}
-			const filter = { _id: ObjectId(seller_id) };
-			const option = {upsert:true}
-			const updatedDoc = {
-				$set: {
-					status:'verified'
+		app.get(
+			'/users-by-role/:uid',
+			verifyJWT,
+			verifyAdmin,
+			async (req, res) => {
+				const decoded = req.decoded;
+				const uid = req.params.uid;
+				const role = req.query.role;
+				if (uid !== decoded.uid) {
+					return res
+						.status(403)
+						.send({ message: 'Access Forbidden', code: 403 });
 				}
+				const query = { role };
+				const users = await userCollection.find(query).toArray();
+				res.send(users);
 			}
-			const result = await userCollection.updateOne(filter, updatedDoc, option);
-			res.send(result)
-		})
+		);
+
+		app.patch(
+			'/seller-verify/:uid',
+			verifyJWT,
+			verifyAdmin,
+			async (req, res) => {
+				const decoded = req.decoded;
+				const uid = req.params.uid;
+				const id = req.query.id;
+				if (uid !== decoded.uid) {
+					return res
+						.status(403)
+						.send({ message: 'Access Forbidden', code: 403 });
+				}
+				const filter = { _id: ObjectId(id) };
+				const option = { upsert: true };
+				const updatedDoc = {
+					$set: {
+						status: 'verified',
+					},
+				};
+
+				const result = await userCollection.updateOne(
+					filter,
+					updatedDoc,
+					option
+				);
+				res.send(result);
+			}
+		);
+		app.delete(
+			'/user-delete/:uid',
+			verifyJWT,
+			verifyAdmin,
+			async (req, res) => {
+				const decoded = req.decoded;
+				const uid = req.params.uid;
+				const id = req.query.id;
+				if (uid !== decoded.uid) {
+					return res
+						.status(403)
+						.send({ message: 'Access Forbidden', code: 403 });
+				}
+				const filter = { _id: ObjectId(id) };
+				const result = await userCollection.deleteOne(filter);
+				res.send(result)
+			}
+		);
 
 		//All Seller Operation
 
