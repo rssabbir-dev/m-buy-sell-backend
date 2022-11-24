@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
 const port = process.env.PORT || 5000;
 const jwt = require('jsonwebtoken');
@@ -125,20 +125,38 @@ const run = async () => {
 			const user = await userCollection.findOne(query);
 			res.send({ isAdmin: user?.role === 'admin' ? true : false });
 		});
-		app.get('/sellers/:uid', verifyJWT, verifyAdmin, async (req, res) => {
+		app.get('/users-by-role/:uid', verifyJWT, verifyAdmin, async (req, res) => {
 			const decoded = req.decoded;
 			const uid = req.params.uid;
+			const role = req.query.role;
 			if (uid !== decoded.uid) {
 				return res
 					.status(403)
 					.send({ message: 'Access Forbidden', code: 403 });
 			}
-			const query = {};
+			const query = {role};
 			const users = await userCollection.find(query).toArray();
 			res.send(users);
 		});
-		app.get('/buyer/:uid', async (req, res) => {
-			
+
+		app.patch('/seller-verify/:uid', verifyJWT, verifyAdmin, async (req, res) => {
+			const decoded = req.decoded;
+			const uid = req.params.uid;
+			const seller_id = req.query.seller_id;
+			if (uid !== decoded.uid) {
+				return res
+					.status(403)
+					.send({ message: 'Access Forbidden', code: 403 });
+			}
+			const filter = { _id: ObjectId(seller_id) };
+			const option = {upsert:true}
+			const updatedDoc = {
+				$set: {
+					status:'verified'
+				}
+			}
+			const result = await userCollection.updateOne(filter, updatedDoc, option);
+			res.send(result)
 		})
 
 		//All Seller Operation
