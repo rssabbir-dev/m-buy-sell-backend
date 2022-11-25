@@ -47,7 +47,7 @@ const run = async () => {
 		const productCollection = database.collection('products');
 		const userCollection = database.collection('users');
 		const categoryCollection = database.collection('categories');
-		const orderCollection = database.collection('orders')
+		const orderCollection = database.collection('orders');
 
 		const verifySeller = async (req, res, next) => {
 			const decoded = req.decoded;
@@ -243,6 +243,18 @@ const run = async () => {
 		});
 
 		//all orders operation
+		app.get('/orders/:uid', verifyJWT, async (req, res) => {
+			const decoded = req.decoded;
+			const uid = req.params.uid;
+			if (uid !== decoded.uid) {
+				return res
+					.status(403)
+					.send({ message: 'Access Forbidden', code: 403 });
+			}
+			const query = { 'customer_info.customer_uid': uid };
+			const orders = await orderCollection.find(query).toArray();
+			res.send(orders);
+		});
 		app.post('/orders/:uid', verifyJWT, async (req, res) => {
 			const decoded = req.decoded;
 			const uid = req.params.uid;
@@ -252,9 +264,30 @@ const run = async () => {
 					.send({ message: 'Access Forbidden', code: 403 });
 			}
 			const order = req.body;
-			const result = await orderCollection.insertOne(order)
-			res.send(result)
-		})
+			const result = await orderCollection.insertOne(order);
+			res.send(result);
+		});
+
+		app.delete(
+			'/product-delete/:uid',
+			verifyJWT,
+			verifyAdmin,
+			async (req, res) => {
+				const decoded = req.decoded;
+				const uid = req.params.uid;
+				const id = req.query.id;
+				if (uid !== decoded.uid) {
+					return res
+						.status(403)
+						.send({ message: 'Access Forbidden', code: 403 });
+				}
+				const filter = { _id: ObjectId(id) };
+				const result = await productCollection.deleteOne(filter);
+				res.send(result);
+			}
+		);
+
+		//All Promote Operateion
 	} finally {
 	}
 };
