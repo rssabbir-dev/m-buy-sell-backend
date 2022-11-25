@@ -48,6 +48,7 @@ const run = async () => {
 		const userCollection = database.collection('users');
 		const categoryCollection = database.collection('categories');
 		const orderCollection = database.collection('orders');
+		const blogCollection = database.collection('blogs')
 
 		const verifySeller = async (req, res, next) => {
 			const decoded = req.decoded;
@@ -136,6 +137,13 @@ const run = async () => {
 		);
 
 		//All User Operation
+		app.get('/user/buyer/:uid', async (req, res) => {
+			const uid = req.params.uid;
+			const query = { uid: uid };
+			const user = await userCollection.findOne(query);
+			res.send({ isBuyer: user?.role === 'buyer' ? true : false });
+		});
+
 		app.post('/jwt', async (req, res) => {
 			const user = req.body;
 			jwt.sign(user, process.env.JWT_ACCESS_TOKEN, (err, token) => {
@@ -266,6 +274,22 @@ const run = async () => {
 			const order = req.body;
 			const result = await orderCollection.insertOne(order);
 			res.send(result);
+
+			const productQuery = {
+				_id: ObjectId(order.product_info.product_id),
+			};
+			const option = {upsert:true}
+			const orderedProduct = await productCollection.findOne(
+				productQuery
+			);
+
+			const updatedDoc = {
+				$set: {
+					promote: false,
+					status: 'sold',
+				},
+			};
+			const productResult = await productCollection.updateOne(productQuery,updatedDoc,option) 
 		});
 
 		app.delete(
@@ -288,6 +312,47 @@ const run = async () => {
 		);
 
 		//All Promote Operateion
+		app.get('/promoted-product', async (req, res) => {
+			const query = { promote: true };
+			const products = await productCollection.find(query).toArray();
+			res.send(products);
+		});
+		app.patch(
+			'/promote-product/:uid',
+			verifyJWT,
+			verifySeller,
+			async (req, res) => {
+				const decoded = req.decoded;
+				const uid = req.params.uid;
+				const id = req.query.id;
+				if (uid !== decoded.uid) {
+					return res
+						.status(403)
+						.send({ message: 'Access Forbidden', code: 403 });
+				}
+				const filter = { _id: ObjectId(id) };
+				const option = { upsert: true };
+				const updatedDoc = {
+					$set: {
+						promote: true,
+					},
+				};
+
+				const result = await productCollection.updateOne(
+					filter,
+					updatedDoc,
+					option
+				);
+				res.send(result);
+			}
+		);
+
+		//Blogs
+		app.get('/blogs', async (req, res) => {
+			const query = {}
+			const blogs = await blogCollection.find(query).toArray()
+			res.send(blogs)
+		})
 	} finally {
 	}
 };
