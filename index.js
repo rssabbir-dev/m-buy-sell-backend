@@ -47,6 +47,7 @@ const run = async () => {
 		const productCollection = database.collection('products');
 		const userCollection = database.collection('users');
 		const categoryCollection = database.collection('categories');
+		const orderCollection = database.collection('orders')
 
 		const verifySeller = async (req, res, next) => {
 			const decoded = req.decoded;
@@ -240,6 +241,20 @@ const run = async () => {
 			const user = await userCollection.findOne(query);
 			res.send({ isSeller: user?.role === 'seller' ? true : false });
 		});
+
+		//all orders operation
+		app.post('/orders/:uid', verifyJWT, async (req, res) => {
+			const decoded = req.decoded;
+			const uid = req.params.uid;
+			if (uid !== decoded.uid) {
+				return res
+					.status(403)
+					.send({ message: 'Access Forbidden', code: 403 });
+			}
+			const order = req.body;
+			const result = await orderCollection.insertOne(order)
+			res.send(result)
+		})
 	} finally {
 	}
 };
