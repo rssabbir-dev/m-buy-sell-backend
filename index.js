@@ -83,6 +83,12 @@ const run = async () => {
 			const products = await productCollection.find(query).toArray();
 			res.send(products);
 		});
+		app.get('/category/:id', async (req, res) => {
+			const id = req.params.id;
+			const query = { category_id: id };
+			const products = await productCollection.find(query).toArray();
+			res.send(products);
+		});
 		app.post(
 			'/products/:uid',
 			verifyJWT,
@@ -97,6 +103,33 @@ const run = async () => {
 						.send({ message: 'Access Forbidden', code: 403 });
 				}
 				const result = await productCollection.insertOne(product);
+				res.send(result);
+			}
+		);
+
+		//All Category Operation
+		app.get('/categories', async (req, res) => {
+			const query = {};
+			const categories = await categoryCollection
+				.find(query)
+				.sort({ category_name: 1 })
+				.toArray();
+			res.send(categories);
+		});
+		app.post(
+			'/categories/:uid',
+			verifyJWT,
+			verifySeller,
+			async (req, res) => {
+				const decoded = req.decoded;
+				const uid = req.params.uid;
+				const new_category = req.body;
+				if (uid !== decoded.uid) {
+					return res
+						.status(403)
+						.send({ message: 'Access Forbidden', code: 403 });
+				}
+				const result = await categoryCollection.insertOne(new_category);
 				res.send(result);
 			}
 		);
@@ -143,7 +176,14 @@ const run = async () => {
 				res.send(users);
 			}
 		);
-
+		app.get('/seller-verify/:uid', async (req, res) => {
+			const uid = req.params.uid;
+			const query = { uid: uid };
+			const seller = await userCollection.findOne(query);
+			res.send({
+				isVerified: seller?.status === 'verified' ? true : false,
+			});
+		});
 		app.patch(
 			'/seller-verify/:uid',
 			verifyJWT,
@@ -188,7 +228,7 @@ const run = async () => {
 				}
 				const filter = { _id: ObjectId(id) };
 				const result = await userCollection.deleteOne(filter);
-				res.send(result)
+				res.send(result);
 			}
 		);
 
