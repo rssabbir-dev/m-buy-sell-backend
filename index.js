@@ -218,6 +218,11 @@ const run = async () => {
 		//save new user
 		app.post('/users', async (req, res) => {
 			const user = req.body;
+			const query = { uid: user.uid };
+			const userInDb = await userCollection.findOne(query);
+			if (userInDb?.uid) {
+				return res.send({});
+			}
 			const result = await userCollection.insertOne(user);
 			res.send(result);
 		});
@@ -512,7 +517,7 @@ const run = async () => {
 			const productUpdatedDoc = {
 				$set: {
 					order_status: true,
-					promote: false
+					promote: false,
 				},
 			};
 			const productResult = await productCollection.updateOne(
