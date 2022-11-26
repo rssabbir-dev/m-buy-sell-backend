@@ -48,7 +48,7 @@ const run = async () => {
 		const userCollection = database.collection('users');
 		const categoryCollection = database.collection('categories');
 		const orderCollection = database.collection('orders');
-		const blogCollection = database.collection('blogs')
+		const blogCollection = database.collection('blogs');
 
 		const verifySeller = async (req, res, next) => {
 			const decoded = req.decoded;
@@ -82,13 +82,19 @@ const run = async () => {
 					.status(403)
 					.send({ message: 'Access Forbidden', code: 403 });
 			}
-			const products = await productCollection.find(query).toArray();
+			const products = await productCollection
+				.find(query)
+				.sort({ createAt: -1 })
+				.toArray();
 			res.send(products);
 		});
 		app.get('/category/:id', async (req, res) => {
 			const id = req.params.id;
 			const query = { category_id: id };
-			const products = await productCollection.find(query).toArray();
+			const products = await productCollection
+				.find(query)
+				.sort({ createAt: -1 })
+				.toArray();
 			res.send(products);
 		});
 		app.post(
@@ -147,10 +153,8 @@ const run = async () => {
 		app.post('/jwt', async (req, res) => {
 			const user = req.body;
 			jwt.sign(user, process.env.JWT_ACCESS_TOKEN, (err, token) => {
-				console.log(token);
 				res.send({ accessToken: token });
 			});
-			console.log(user);
 		});
 
 		//save new user
@@ -278,7 +282,7 @@ const run = async () => {
 			const productQuery = {
 				_id: ObjectId(order.product_info.product_id),
 			};
-			const option = {upsert:true}
+			const option = { upsert: true };
 			const orderedProduct = await productCollection.findOne(
 				productQuery
 			);
@@ -289,7 +293,11 @@ const run = async () => {
 					status: 'sold',
 				},
 			};
-			const productResult = await productCollection.updateOne(productQuery,updatedDoc,option) 
+			const productResult = await productCollection.updateOne(
+				productQuery,
+				updatedDoc,
+				option
+			);
 		});
 
 		app.delete(
@@ -311,10 +319,13 @@ const run = async () => {
 			}
 		);
 
-		//All Promote Operateion
+		//All Promote Operation
 		app.get('/promoted-product', async (req, res) => {
 			const query = { promote: true };
-			const products = await productCollection.find(query).toArray();
+			const products = await productCollection
+				.find(query)
+				.sort({ createAt: -1 })
+				.toArray();
 			res.send(products);
 		});
 		app.patch(
@@ -349,10 +360,10 @@ const run = async () => {
 
 		//Blogs
 		app.get('/blogs', async (req, res) => {
-			const query = {}
-			const blogs = await blogCollection.find(query).toArray()
-			res.send(blogs)
-		})
+			const query = {};
+			const blogs = await blogCollection.find(query).toArray();
+			res.send(blogs);
+		});
 	} finally {
 	}
 };
