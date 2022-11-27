@@ -44,7 +44,9 @@ const verifyJWT = async (req, res, next) => {
 // Run MongoDB Database
 const run = async () => {
 	try {
+		//Database Name
 		const database = client.db('mBuySellDB');
+		//All Database Collection
 		const productCollection = database.collection('products');
 		const userCollection = database.collection('users');
 		const categoryCollection = database.collection('categories');
@@ -52,6 +54,15 @@ const run = async () => {
 		const blogCollection = database.collection('blogs');
 		const paymentCollection = database.collection('payments');
 
+		// give a token when user login
+		app.post('/jwt', async (req, res) => {
+			const user = req.body;
+			jwt.sign(user, process.env.JWT_ACCESS_TOKEN, (err, token) => {
+				res.send({ accessToken: token });
+			});
+		});
+
+		//Verify User role is Seller
 		const verifySeller = async (req, res, next) => {
 			const decoded = req.decoded;
 			const sellerQuery = { uid: decoded.uid };
@@ -63,6 +74,7 @@ const run = async () => {
 			}
 			next();
 		};
+		//Verify user role is Admin
 		const verifyAdmin = async (req, res, next) => {
 			const decoded = req.decoded;
 			const adminQuery = { uid: decoded.uid };
@@ -74,7 +86,10 @@ const run = async () => {
 			}
 			next();
 		};
-		//All Product Operation
+
+		//---All Product Operation---//
+
+		//Get all product created by seller
 		app.get('/products/:uid', verifyJWT, verifySeller, async (req, res) => {
 			const decoded = req.decoded;
 			const uid = req.params.uid;
@@ -90,6 +105,7 @@ const run = async () => {
 				.toArray();
 			res.send(products);
 		});
+		//Get all product filter by category id
 		app.get('/category/:id', async (req, res) => {
 			const id = req.params.id;
 			const query = { category_id: id };
@@ -99,6 +115,7 @@ const run = async () => {
 				.toArray();
 			res.send(products);
 		});
+		//Post only seller created product
 		app.post(
 			'/products/:uid',
 			verifyJWT,
@@ -117,7 +134,9 @@ const run = async () => {
 			}
 		);
 
-		//All Category Operation
+		//---All Category Operation---//
+
+		//Get all category list
 		app.get('/categories', async (req, res) => {
 			const query = {};
 			const categories = await categoryCollection
@@ -126,6 +145,8 @@ const run = async () => {
 				.toArray();
 			res.send(categories);
 		});
+
+		//Create a category items by Seller
 		app.post(
 			'/categories/:uid',
 			verifyJWT,
@@ -144,7 +165,8 @@ const run = async () => {
 			}
 		);
 
-		//All User Operation
+		//---All User Operation---//
+		//Check is user is buyer
 		app.get('/user/buyer/:uid', async (req, res) => {
 			const uid = req.params.uid;
 			const query = { uid: uid };
@@ -152,12 +174,7 @@ const run = async () => {
 			res.send({ isBuyer: user?.role === 'buyer' ? true : false });
 		});
 
-		app.post('/jwt', async (req, res) => {
-			const user = req.body;
-			jwt.sign(user, process.env.JWT_ACCESS_TOKEN, (err, token) => {
-				res.send({ accessToken: token });
-			});
-		});
+		//Report a seller created product by buyer, only buyer can report
 		app.patch('/report-product/:uid', verifyJWT, async (req, res) => {
 			const decoded = req.decoded;
 			const uid = req.params.uid;
@@ -185,6 +202,68 @@ const run = async () => {
 			res.send(result);
 		});
 
+		//Saved new user data on database
+		app.post('/users', async (req, res) => {
+			const user = req.body;
+			const query = { uid: user.uid };
+			const userInDb = await userCollection.findOne(query);
+			if (userInDb?.uid) {
+				return res.send({});
+			}
+			const result = await userCollection.insertOne(user);
+			res.send(result);
+		});
+
+		//---All Admin Operation---//
+		//Check user is Admin
+		app.get('/user/admin/:uid', async (req, res) => {
+			const uid = req.params.uid;
+			const query = { uid };
+			const user = await userCollection.findOne(query);
+			res.send({ isAdmin: user?.role === 'admin' ? true : false });
+		});
+		//Get all reported seller product
+		app.get(
+			'/reported-products/:uid',
+			verifyJWT,
+			verifyAdmin,
+			async (req, res) => {
+				const decoded = req.decoded;
+				const uid = req.params.uid;
+				if (uid !== decoded.uid) {
+					return res
+						.status(403)
+						.send({ message: 'Access Forbidden', code: 403 });
+				}
+				const query = { reported: true };
+				const reportedProducts = await productCollection
+					.find(query)
+					.sort({ reportCount: 1 })
+					.toArray();
+				res.send(reportedProducts);
+			}
+		);
+		//Get all user data filter by their role
+		app.get(
+			'/users-by-role/:uid',
+			verifyJWT,
+			verifyAdmin,
+			async (req, res) => {
+				const decoded = req.decoded;
+				const uid = req.params.uid;
+				const role = req.query.role;
+				if (uid !== decoded.uid) {
+					return res
+						.status(403)
+						.send({ message: 'Access Forbidden', code: 403 });
+				}
+				const query = { role };
+				const users = await userCollection.find(query).toArray();
+				res.send(users);
+			}
+		);
+
+		//Undo report given by buyer(Admin Only)
 		app.patch(
 			'/report-product-safe/:uid',
 			verifyJWT,
@@ -214,72 +293,7 @@ const run = async () => {
 				res.send(result);
 			}
 		);
-
-		//save new user
-		app.post('/users', async (req, res) => {
-			const user = req.body;
-			const query = { uid: user.uid };
-			const userInDb = await userCollection.findOne(query);
-			if (userInDb?.uid) {
-				return res.send({});
-			}
-			const result = await userCollection.insertOne(user);
-			res.send(result);
-		});
-
-		//All Admin Operation
-		app.get(
-			'/reported-products/:uid',
-			verifyJWT,
-			verifyAdmin,
-			async (req, res) => {
-				const decoded = req.decoded;
-				const uid = req.params.uid;
-				if (uid !== decoded.uid) {
-					return res
-						.status(403)
-						.send({ message: 'Access Forbidden', code: 403 });
-				}
-				const query = { reported: true };
-				const reportedProducts = await productCollection
-					.find(query)
-					.sort({ reportCount: 1 })
-					.toArray();
-				res.send(reportedProducts);
-			}
-		);
-		app.get('/user/admin/:uid', async (req, res) => {
-			const uid = req.params.uid;
-			const query = { uid };
-			const user = await userCollection.findOne(query);
-			res.send({ isAdmin: user?.role === 'admin' ? true : false });
-		});
-		app.get(
-			'/users-by-role/:uid',
-			verifyJWT,
-			verifyAdmin,
-			async (req, res) => {
-				const decoded = req.decoded;
-				const uid = req.params.uid;
-				const role = req.query.role;
-				if (uid !== decoded.uid) {
-					return res
-						.status(403)
-						.send({ message: 'Access Forbidden', code: 403 });
-				}
-				const query = { role };
-				const users = await userCollection.find(query).toArray();
-				res.send(users);
-			}
-		);
-		app.get('/seller-verify/:uid', async (req, res) => {
-			const uid = req.params.uid;
-			const query = { uid: uid };
-			const seller = await userCollection.findOne(query);
-			res.send({
-				isVerified: seller?.status === 'verified' ? true : false,
-			});
-		});
+		// make seller verified
 		app.patch(
 			'/seller-verify/:uid',
 			verifyJWT,
@@ -309,6 +323,7 @@ const run = async () => {
 				res.send(result);
 			}
 		);
+		//Delete user by admin
 		app.delete(
 			'/user-delete/:uid',
 			verifyJWT,
@@ -327,6 +342,7 @@ const run = async () => {
 				res.send(result);
 			}
 		);
+		//Delete Reported product by admin
 		app.delete(
 			'/report-product-delete/:uid',
 			verifyJWT,
@@ -346,8 +362,17 @@ const run = async () => {
 			}
 		);
 
-		//All Seller Operation
-
+		//---All Seller Operation---//
+		//Checked Seller Verified
+		app.get('/seller-verify/:uid', async (req, res) => {
+			const uid = req.params.uid;
+			const query = { uid: uid };
+			const seller = await userCollection.findOne(query);
+			res.send({
+				isVerified: seller?.status === 'verified' ? true : false,
+			});
+		});
+		//Checked user is Seller
 		app.get('/user/seller/:uid', async (req, res) => {
 			const uid = req.params.uid;
 			const query = { uid: uid };
@@ -355,7 +380,28 @@ const run = async () => {
 			res.send({ isSeller: user?.role === 'seller' ? true : false });
 		});
 
-		//all orders operation
+		//Delete a product created by seller (delete by seller)
+		app.delete(
+			'/product-delete/:uid',
+			verifyJWT,
+			verifySeller,
+			async (req, res) => {
+				const decoded = req.decoded;
+				const uid = req.params.uid;
+				const id = req.query.id;
+				if (uid !== decoded.uid) {
+					return res
+						.status(403)
+						.send({ message: 'Access Forbidden', code: 403 });
+				}
+				const filter = { _id: ObjectId(id) };
+				const result = await productCollection.deleteOne(filter);
+				res.send(result);
+			}
+		);
+
+		//---all orders operation---//
+		//Get all order filter by user uid
 		app.get('/orders/:uid', verifyJWT, async (req, res) => {
 			const decoded = req.decoded;
 			const uid = req.params.uid;
@@ -368,6 +414,7 @@ const run = async () => {
 			const orders = await orderCollection.find(query).toArray();
 			res.send(orders);
 		});
+		//Get a single order by user uid and order id
 		app.get('/order/:uid', verifyJWT, async (req, res) => {
 			const decoded = req.decoded;
 			const uid = req.params.uid;
@@ -381,6 +428,7 @@ const run = async () => {
 			const order = await orderCollection.findOne(query);
 			res.send(order);
 		});
+		//Create a order by user
 		app.post('/orders/:uid', verifyJWT, async (req, res) => {
 			const decoded = req.decoded;
 			const uid = req.params.uid;
@@ -402,26 +450,8 @@ const run = async () => {
 			);
 		});
 
-		app.delete(
-			'/product-delete/:uid',
-			verifyJWT,
-			verifySeller,
-			async (req, res) => {
-				const decoded = req.decoded;
-				const uid = req.params.uid;
-				const id = req.query.id;
-				if (uid !== decoded.uid) {
-					return res
-						.status(403)
-						.send({ message: 'Access Forbidden', code: 403 });
-				}
-				const filter = { _id: ObjectId(id) };
-				const result = await productCollection.deleteOne(filter);
-				res.send(result);
-			}
-		);
-
 		//All Promote Operation
+		//Get All Promoted Product
 		app.get('/promoted-product', async (req, res) => {
 			const query = { promote: true };
 			const products = await productCollection
@@ -430,6 +460,7 @@ const run = async () => {
 				.toArray();
 			res.send(products);
 		});
+		// Make a product to promoted product
 		app.patch(
 			'/promote-product/:uid',
 			verifyJWT,
@@ -468,7 +499,6 @@ const run = async () => {
 		});
 
 		//Create Payment Intent
-
 		app.post('/create-payment-intent/:uid', verifyJWT, async (req, res) => {
 			const uid = req.params.uid;
 			const decode = req.decoded;
@@ -489,6 +519,7 @@ const run = async () => {
 			res.send({ clientSecret: paymentIntent.client_secret });
 		});
 
+		//save payment data to database
 		app.post('/payments/:uid', verifyJWT, async (req, res) => {
 			const uid = req.params.uid;
 			const decode = req.decoded;
@@ -500,6 +531,7 @@ const run = async () => {
 			const payment = req.body;
 			const result = await paymentCollection.insertOne(payment);
 			res.send(result);
+			//set order status true after payment done
 			const orderQuery = { _id: ObjectId(payment.orderId) };
 			const option = { upsert: true };
 			const orderUpdatedDoc = {
@@ -512,7 +544,7 @@ const run = async () => {
 				orderUpdatedDoc,
 				option
 			);
-
+			//set order status true and promote status false after payment done
 			const productQuery = { _id: ObjectId(payment.product_id) };
 			const productUpdatedDoc = {
 				$set: {
